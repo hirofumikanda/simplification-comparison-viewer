@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Simplification Comparison</title>
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <link href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css" rel="stylesheet" />
+  <style>
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+    }
+
+    #layer-switcher {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1;
+      padding: 6px 8px;
+      background: #fff;
+      border-radius: 4px;
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+      font: 14px/1.4 sans-serif;
+    }
+
+    #layer-switcher label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    #layer-switcher .swatch {
+      display: inline-block;
+      width: 24px;
+      height: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="map"></div>
+  <div id="layer-switcher">
+    <label><input type="checkbox" value="river-ps" checked /><span class="swatch" style="border-top: 5px solid rgba(80, 80, 80, 0.5)"></span>river-ps（単純化なし）</label>
+    <label><input type="checkbox" value="river-dp" /><span class="swatch" style="border-top: 2px dashed #e60000"></span>river-dp（Douglas-Peucker）</label>
+    <label><input type="checkbox" value="river-vw" /><span class="swatch" style="border-top: 2px dashed #0066ff"></span>river-vw（Visvalingam-Whyatt）</label>
+  </div>
+  <script src="https://unpkg.com/pmtiles@4.3.0/dist/pmtiles.js"></script>
+  <script type="module">
+    import { Map, NavigationControl, addProtocol } from 'https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs';
+
+    const protocol = new pmtiles.Protocol();
+    addProtocol('pmtiles', protocol.tile);
+
+    // 下から順に描画する（太い river-ps を一番下に置き、細い線が上に重なるようにする）
+    const riverLayers = [
+      { name: 'river-ps', paint: { 'line-color': 'rgba(80, 80, 80, 0.5)', 'line-width': 5 } },
+      { name: 'river-dp', paint: { 'line-color': '#e60000', 'line-width': 2, 'line-dasharray': [4, 2] } },
+      { name: 'river-vw', paint: { 'line-color': '#0066ff', 'line-width': 2, 'line-dasharray': [2, 1.5] } }
+    ];
+    const initialLayers = ['river-ps'];
+
+    const map = new Map({
+      container: 'map',
+      hash: true,
+      style: {
+        version: 8,
+        glyphs: 'https://tile.openstreetmap.jp/fonts/{fontstack}/{range}.pbf',
+        sources: {
+          basemap: {
+            type: 'raster',
+            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+            tileSize: 256,
+            maxzoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>'
+          },
+          river: {
+            type: 'vector',
+            url: 'pmtiles://pmtiles/river.pmtiles',
+            minzoom: 5,
+            maxzoom: 14,
+            attribution: '&copy; <a href="https://overturemaps.org" target="_blank">Overture Maps Foundation</a>'
+          }
+        },
+        layers: [
+          {
+            id: 'basemap',
+            type: 'raster',
+            source: 'basemap',
+            paint: {
+              'raster-opacity': 0.3
+            }
+          },
+          ...riverLayers.map(({ name, paint }) => ({
+            id: name,
+            type: 'line',
+            source: 'river',
+            'source-layer': name,
+            layout: {
+              visibility: initialLayers.includes(name) ? 'visible' : 'none',
+              'line-join': 'round'
+            },
+            paint
+          }))
+        ]
+      },
+      center: [144.4034, 43.0324],
+      zoom: 10
+    });
+
+    map.addControl(new NavigationControl());
+    // map.showTileBoundaries = true;
+
+    for (const checkbox of document.querySelectorAll('#layer-switcher input[type="checkbox"]')) {
+      checkbox.addEventListener('change', (e) => {
+        map.setLayoutProperty(e.target.value, 'visibility', e.target.checked ? 'visible' : 'none');
+      });
+    }
+  </script>
+</body>
+
+</html>
